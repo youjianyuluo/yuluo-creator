@@ -6,7 +6,6 @@
 2. [Vercel](https://vercel.com) 账号（用 GitHub 登录）
 3. [Supabase](https://supabase.com) 账号
 4. [DeepSeek](https://platform.deepseek.com) 账号
-5. [Stripe](https://stripe.com) 账号（可选，后续接入）
 
 ## 部署步骤
 
@@ -29,15 +28,11 @@
 2. 创建 API Key
 3. 复制到 Vercel 环境变量 `DEEPSEEK_API_KEY`
 
-### 3. Stripe 配置（可选）
+### 3. 支付配置（微信/支付宝）
 
-1. 在 Stripe Dashboard 创建产品，定价 ¥29/月
-2. 复制 Publishable Key → `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY`
-3. 复制 Secret Key → `STRIPE_SECRET_KEY`
-4. 复制 Price ID → `NEXT_PUBLIC_STRIPE_PRICE_ID`
-5. 创建 Webhook Endpoint: `https://你的域名.vercel.app/api/stripe/webhook`
-   - 监听事件：`checkout.session.completed`, `invoice.payment_succeeded`, `customer.subscription.deleted`
-6. 复制 Webhook Signing Secret → `STRIPE_WEBHOOK_SECRET`
+1. 准备微信收款码和支付宝收款码图片
+2. 在定价页替换收款码占位图（`src/app/pricing/page.tsx` 第206行附近）
+3. 目前采用手动开通流程：用户扫码付款 → 发送付款凭证至邮箱 → 管理员在 Supabase Dashboard 手动升级用户 plan 为 'pro'
 
 ### 4. Vercel 部署
 
@@ -55,10 +50,6 @@ git push origin main
    - `SUPABASE_SERVICE_ROLE_KEY`
    - `DEEPSEEK_API_KEY`
    - `DEEPSEEK_BASE_URL`（默认 https://api.deepseek.com）
-   - `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY`
-   - `STRIPE_SECRET_KEY`
-   - `NEXT_PUBLIC_STRIPE_PRICE_ID`
-   - `STRIPE_WEBHOOK_SECRET`
    - `NEXT_PUBLIC_APP_URL`（填 Vercel 分配的域名）
 
 4. 点击 Deploy
@@ -88,5 +79,5 @@ npm run dev
 | Vercel | 100GB 带宽 | $20/月起 |
 | Supabase | 500MB 数据库 | $25/月起 |
 | DeepSeek | 5M tokens | ¥1/百万tokens |
-| Stripe | - | 2.9% + ¥0.30/笔 |
+| 微信/支付宝 | - | 0%手续费（手动开通） |
 | 域名 | - | ~¥50/年 |
