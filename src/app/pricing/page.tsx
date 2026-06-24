@@ -2,6 +2,8 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import Image from "next/image";
+import { useAuth } from "@/lib/auth-context";
 
 const plans = [
   {
@@ -36,7 +38,7 @@ const plans = [
       "提前体验新功能",
     ],
     missing: [],
-    cta: "升级 Pro",
+    cta: "微信扫码升级",
     href: "#",
     highlight: true,
     isPro: true,
@@ -49,55 +51,37 @@ const faqs = [
     a: "是的，免费版永久免费，每月5篇创作额度。不需要绑卡，注册即可使用。",
   },
   {
+    q: "Pro版怎么升级？",
+    a: "目前通过微信支付手动升级。点击升级按钮后扫码付款，付款后联系我们开通Pro权限，1小时内生效。后续会上线自动开通。",
+  },
+  {
     q: "Pro版可以随时取消吗？",
-    a: "当然，随时取消，不会有额外费用。取消后当前订阅周期内仍可正常使用。",
+    a: "当然，联系客服随时取消，当月仍可正常使用到周期结束。",
   },
   {
     q: "生成的文案能直接发布吗？",
     a: "可以。我们的AI针对每个平台独立优化了文案风格，生成后可以直接复制发布。建议根据个人风格微调一下更好。",
   },
-  {
-    q: "支持哪些平台？",
-    a: "目前支持：微信公众号、小红书、抖音（脚本）、今日头条。更多平台持续加入中。",
-  },
 ];
 
 export default function PricingPage() {
-  const [loading, setLoading] = useState(false);
-  const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
+  const { user } = useAuth();
+  const [showPayModal, setShowPayModal] = useState(false);
+  const [payMethod, setPayMethod] = useState<"wechat" | "alipay" | null>(null);
+  const [copied, setCopied] = useState(false);
 
-  const handleProUpgrade = async () => {
-    setLoading(true);
-    setMessage(null);
-
-    try {
-      const stripePriceId = process.env.NEXT_PUBLIC_STRIPE_PRICE_ID;
-      if (!stripePriceId) {
-        setMessage({ type: "error", text: "支付系统暂未配置，请稍后再试" });
-        return;
-      }
-
-      const res = await fetch("/api/stripe/checkout", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ priceId: stripePriceId }),
-      });
-
-      const data = await res.json();
-
-      if (data.url) {
-        window.location.href = data.url;
-      } else {
-        throw new Error(data.error || "创建支付会话失败");
-      }
-    } catch (err: unknown) {
-      setMessage({
-        type: "error",
-        text: err instanceof Error ? err.message : "操作失败，请稍后重试",
-      });
-    } finally {
-      setLoading(false);
+  const handleProUpgrade = () => {
+    if (!user) {
+      window.location.href = "/login";
+      return;
     }
+    setShowPayModal(true);
+  };
+
+  const handleCopyEmail = () => {
+    navigator.clipboard.writeText("271312499@qq.com");
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
   };
 
   return (
@@ -132,10 +116,9 @@ export default function PricingPage() {
             {plan.isPro ? (
               <button
                 onClick={handleProUpgrade}
-                disabled={loading}
-                className={`block w-full text-center py-2.5 rounded-xl font-semibold transition-colors mb-6 bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-50`}
+                className="block w-full text-center py-2.5 rounded-xl font-semibold transition-colors mb-6 bg-indigo-600 text-white hover:bg-indigo-700"
               >
-                {loading ? "正在跳转..." : plan.cta}
+                {plan.cta}
               </button>
             ) : (
               <Link
@@ -161,15 +144,90 @@ export default function PricingPage() {
         ))}
       </div>
 
-      {message && (
+      {/* 支付弹窗 */}
+      {showPayModal && (
         <div
-          className={`max-w-md mx-auto mb-8 text-center text-sm py-2 rounded-lg ${
-            message.type === "success"
-              ? "bg-green-50 text-green-700"
-              : "bg-red-50 text-red-600"
-          }`}
+          className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4"
+          onClick={() => setShowPayModal(false)}
         >
-          {message.text}
+          <div
+            className="bg-white rounded-2xl max-w-md w-full p-6 shadow-xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-lg font-bold">升级 Pro 版 · ¥29/月</h3>
+              <button
+                onClick={() => setShowPayModal(false)}
+                className="text-slate-400 hover:text-slate-600 text-xl"
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* 支付方式选择 */}
+            {!payMethod ? (
+              <div className="space-y-3">
+                <p className="text-sm text-slate-500 mb-2">选择支付方式：</p>
+                <button
+                  onClick={() => setPayMethod("wechat")}
+                  className="w-full border-2 border-green-400 rounded-xl p-4 text-left hover:bg-green-50 transition-colors flex items-center gap-3"
+                >
+                  <span className="text-2xl">💚</span>
+                  <div>
+                    <div className="font-semibold">微信支付</div>
+                    <div className="text-xs text-slate-400">扫码付款，手动开通</div>
+                  </div>
+                </button>
+                <button
+                  onClick={() => setPayMethod("alipay")}
+                  className="w-full border-2 border-blue-400 rounded-xl p-4 text-left hover:bg-blue-50 transition-colors flex items-center gap-3"
+                >
+                  <span className="text-2xl">💙</span>
+                  <div>
+                    <div className="font-semibold">支付宝</div>
+                    <div className="text-xs text-slate-400">扫码付款，手动开通</div>
+                  </div>
+                </button>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                <button
+                  onClick={() => setPayMethod(null)}
+                  className="text-sm text-indigo-600 hover:text-indigo-700"
+                >
+                  ← 返回选择
+                </button>
+                <div className="text-center p-4 bg-slate-50 rounded-xl">
+                  <div className="text-8xl mb-2">{payMethod === "wechat" ? "💚" : "💙"}</div>
+                  <p className="text-sm text-slate-500 mb-3">
+                    {payMethod === "wechat" ? "微信扫码支付 ¥29" : "支付宝扫码支付 ¥29"}
+                  </p>
+                  {/* 付款码占位 — 后续换成真实收款码 */}
+                  <div className="w-48 h-48 mx-auto bg-white border-2 border-dashed border-slate-300 rounded-xl flex items-center justify-center">
+                    <div className="text-center text-slate-400">
+                      <p className="text-4xl mb-1">📱</p>
+                      <p className="text-xs">收款码</p>
+                      <p className="text-xs">即将上传</p>
+                    </div>
+                  </div>
+                </div>
+                <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 text-sm text-amber-800">
+                  <p className="font-semibold mb-1">📌 付款后操作：</p>
+                  <p>1. 截图付款凭证</p>
+                  <p>
+                    2. 发送至邮箱：{" "}
+                    <button
+                      onClick={handleCopyEmail}
+                      className="text-indigo-600 font-medium hover:text-indigo-700"
+                    >
+                      271312499@qq.com {copied ? "✅已复制" : "📋复制"}
+                    </button>
+                  </p>
+                  <p>3. 附上你的注册邮箱，1小时内开通Pro</p>
+                </div>
+              </div>
+            )}
+          </div>
         </div>
       )}
 
