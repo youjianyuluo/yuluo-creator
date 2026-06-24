@@ -1,7 +1,8 @@
 "use client";
 
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import Link from "next/link";
+import { useAuth } from "@/lib/auth-context";
 
 const platforms = [
   { id: "wechat", name: "公众号", icon: "📱", color: "border-green-400 hover:border-green-500 bg-green-50" },
@@ -11,6 +12,7 @@ const platforms = [
 ];
 
 export default function CreatePage() {
+  const { user, supabase } = useAuth();
   const [idea, setIdea] = useState("");
   const [selected, setSelected] = useState<string[]>([]);
   const [results, setResults] = useState<Record<string, string>>({});
@@ -18,8 +20,34 @@ export default function CreatePage() {
   const [error, setError] = useState("");
   const [activeTab, setActiveTab] = useState<string>("");
   const [copied, setCopied] = useState<string>("");
+  const [usage, setUsage] = useState({ count: 0, limit: 5, plan: "free" });
 
   const resultRef = useRef<HTMLDivElement>(null);
+
+  // Load usage data if logged in
+  useEffect(() => {
+    if (!user) return;
+    loadUsage();
+  }, [user]);
+
+  async function loadUsage() {
+    if (!user) return;
+    const { data: sub } = await supabase
+      .from("subscriptions")
+      .select("plan")
+      .eq("user_id", user.id)
+      .single();
+    const plan = sub?.plan || "free";
+    const limit = plan === "pro" ? Infinity : 5;
+    const month = new Date().toISOString().slice(0, 7);
+    const { data: usageData } = await supabase
+      .from("usage")
+      .select("count")
+      .eq("user_id", user.id)
+      .eq("month", month)
+      .single();
+    setUsage({ count: usageData?.count || 0, limit, plan });
+  }
 
   const togglePlatform = (id: string) => {
     setSelected((prev) =>
@@ -30,6 +58,12 @@ export default function CreatePage() {
   const handleGenerate = async () => {
     if (!idea.trim()) return;
     if (selected.length === 0) return;
+
+    // Check usage limit for free users
+    if (user && usage.plan === "free" && usage.count >= usage.limit) {
+      setError("本月免费额度已用完，请升级 Pro 版继续创作");
+      return;
+    }
 
     setLoading(true);
     setError("");
@@ -53,6 +87,18 @@ export default function CreatePage() {
         const r = data.results[plat];
         if (r && r.content) {
           resultMap[plat] = r.content;
+          // Save to database if logged in
+          if (user) {
+            supabase.rpc("record_generation", {
+              gen_user_id: user.id,
+              gen_idea: idea.trim(),
+              gen_platform: plat,
+              gen_content: r.content,
+            }).then(() => {
+              // Refresh usage
+              loadUsage();
+            });
+          }
         } else if (r && r.error) {
           resultMap[plat] = `❌ 生成失败: ${r.error}`;
         }
@@ -77,12 +123,24 @@ export default function CreatePage() {
     setTimeout(() => setCopied(""), 2000);
   };
 
+  const atLimit = !!(user && usage.plan === "free" && usage.count >= usage.limit);
+
   return (
     <div className="max-w-4xl mx-auto px-4 py-10">
       <h1 className="text-3xl font-bold text-center mb-2">开始创作</h1>
-      <p className="text-slate-500 text-center mb-8">
+      <p className="text-slate-500 text-center mb-2">
         输入你的idea，选择平台，一键生成原生文案
       </p>
+      {user && (
+        <p className="text-center text-xs text-slate-400 mb-6">
+          本月已用 {usage.count}/{usage.plan === "pro" ? "∞" : usage.limit} 篇
+          {usage.plan === "free" && (
+            <Link href="/pricing" className="text-indigo-600 ml-2 hover:text-indigo-700">
+              升级Pro →
+            </Link>
+          )}
+        </p>
+      )}
 
       {/* 输入区 */}
       <div className="bg-white border border-slate-200 rounded-2xl p-6 mb-8 shadow-sm">
@@ -123,10 +181,12 @@ export default function CreatePage() {
         {/* 生成按钮 */}
         <button
           onClick={handleGenerate}
-          disabled={loading || !idea.trim() || selected.length === 0}
+          disabled={loading || !idea.trim() || selected.length === 0 || atLimit}
           className="mt-4 w-full bg-indigo-600 text-white py-3 rounded-xl font-semibold text-lg hover:bg-indigo-700 disabled:bg-slate-300 disabled:cursor-not-allowed transition-colors"
         >
-          {loading ? (
+          {atLimit ? (
+            "本月额度已用完，请升级 Pro"
+          ) : loading ? (
             <span className="flex items-center justify-center gap-2">
               <span className="animate-spin">⏳</span> AI正在为{selected.length}个平台创作中...
             </span>
@@ -145,7 +205,6 @@ export default function CreatePage() {
       {/* 结果区 */}
       {Object.keys(results).length > 0 && (
         <div ref={resultRef} className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
-          {/* Tab 切换 */}
           <div className="flex border-b border-slate-200 bg-slate-50 overflow-x-auto">
             {selected
               .filter((id) => results[id])
@@ -166,8 +225,6 @@ export default function CreatePage() {
                 );
               })}
           </div>
-
-          {/* 内容展示 */}
           <div className="p-6">
             {activeTab && results[activeTab] && (
               <>
@@ -191,7 +248,6 @@ export default function CreatePage() {
         </div>
       )}
 
-      {/* 底部导航 */}
       {Object.keys(results).length > 0 && (
         <div className="text-center mt-8">
           <button
@@ -207,18 +263,20 @@ export default function CreatePage() {
         </div>
       )}
 
-      {/* 没登录只能预览 */}
-      <div className="mt-12 p-6 bg-amber-50 border border-amber-200 rounded-xl text-center">
-        <p className="text-amber-800 text-sm">
-          🔒 <strong>预览模式</strong>：登录后可保存历史记录，免费用户每月5篇创作额度。
-        </p>
-        <Link
-          href="/login"
-          className="inline-block mt-2 text-indigo-600 font-medium text-sm hover:text-indigo-700"
-        >
-          注册 / 登录 →
-        </Link>
-      </div>
+      {/* 未登录提示 */}
+      {!user && (
+        <div className="mt-12 p-6 bg-amber-50 border border-amber-200 rounded-xl text-center">
+          <p className="text-amber-800 text-sm">
+            🔒 <strong>预览模式</strong>：登录后可保存历史记录，免费用户每月5篇创作额度。
+          </p>
+          <Link
+            href="/login"
+            className="inline-block mt-2 text-indigo-600 font-medium text-sm hover:text-indigo-700"
+          >
+            注册 / 登录 →
+          </Link>
+        </div>
+      )}
     </div>
   );
 }

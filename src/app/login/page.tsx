@@ -1,35 +1,50 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import Link from "next/link";
+import { useAuth } from "@/lib/auth-context";
 
 export default function LoginPage() {
+  const { user, signIn, signUp } = useAuth();
+  const router = useRouter();
+
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [isRegister, setIsRegister] = useState(false);
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
 
+  // Already logged in → redirect
+  if (user) {
+    router.push("/dashboard");
+    return null;
+  }
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     setMessage(null);
 
-    // 模拟登录/注册 — 后续接 Supabase Auth
-    try {
-      await new Promise((r) => setTimeout(r, 1000));
+    const result = isRegister
+      ? await signUp(email, password)
+      : await signIn(email, password);
+
+    if (result.error) {
+      setMessage({ type: "error", text: result.error });
+    } else {
       setMessage({
         type: "success",
         text: isRegister ? "注册成功！跳转中..." : "登录成功！跳转中...",
       });
-    } catch {
-      setMessage({
-        type: "error",
-        text: "操作失败，请稍后再试",
-      });
-    } finally {
-      setLoading(false);
+      // Redirect after brief delay
+      setTimeout(() => {
+        router.push("/dashboard");
+        router.refresh();
+      }, 500);
     }
+
+    setLoading(false);
   };
 
   return (
@@ -97,7 +112,10 @@ export default function LoginPage() {
             <>
               已有账号？{" "}
               <button
-                onClick={() => setIsRegister(false)}
+                onClick={() => {
+                  setIsRegister(false);
+                  setMessage(null);
+                }}
                 className="text-indigo-600 font-medium hover:text-indigo-700"
               >
                 去登录
@@ -107,7 +125,10 @@ export default function LoginPage() {
             <>
               没有账号？{" "}
               <button
-                onClick={() => setIsRegister(true)}
+                onClick={() => {
+                  setIsRegister(true);
+                  setMessage(null);
+                }}
                 className="text-indigo-600 font-medium hover:text-indigo-700"
               >
                 注册
