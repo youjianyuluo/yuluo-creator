@@ -1,10 +1,10 @@
-"use client";
+﻿"use client";
 
 import Link from "next/link";
 import { useAuth } from "@/lib/auth-context";
 
 export function Header() {
-  const { user, loading, signOut } = useAuth();
+  const { user, loading, signOut, isAdmin } = useAuth();
 
   return (
     <header className="border-b border-slate-200 bg-white/80 backdrop-blur sticky top-0 z-50">
@@ -32,6 +32,14 @@ export function Header() {
               >
                 📊 仪表盘
               </Link>
+              {isAdmin && (
+                <Link
+                  href="/admin/dashboard"
+                  className="text-slate-600 hover:text-red-500 transition-colors text-xs font-medium"
+                >
+                  🔐 管理
+                </Link>
+              )}
               <span className="text-xs text-slate-400 truncate max-w-[120px]">
                 {user.email}
               </span>

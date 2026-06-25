@@ -1,4 +1,4 @@
-# 雨洛创作助手 — 部署指南
+﻿# 雨洛创作助手 — 部署指南 v2
 
 ## 前置条件
 
@@ -28,21 +28,34 @@
 2. 创建 API Key
 3. 复制到 Vercel 环境变量 `DEEPSEEK_API_KEY`
 
-### 3. 支付配置（微信/支付宝）
+### 3. 管理员账号设置
 
+1. 在 Supabase Dashboard → Authentication → Users 中创建管理员账号
+2. 使用邮箱 `271312499@qq.com` 注册（与代码中硬编码的管理员邮箱一致）
+3. 注册后，在 Supabase SQL Editor 中执行：
+   ```sql
+   UPDATE auth.users SET raw_user_meta_data = jsonb_set(raw_user_meta_data, '{role}', '"admin"') WHERE email = '271312499@qq.com';
+   ```
+4. 登录后可访问 `/admin/dashboard` 管理后台
+
+### 4. 支付配置
+
+#### 收款码
 1. 准备微信收款码和支付宝收款码图片
-2. 在定价页替换收款码占位图（`src/app/pricing/page.tsx` 第206行附近）
-3. 目前采用手动开通流程：用户扫码付款 → 发送付款凭证至邮箱 → 管理员在 Supabase Dashboard 手动升级用户 plan 为 'pro'
+2. 将图片放入 `public/` 目录（例如 `public/wechat-pay.png`、`public/alipay.png`）
+3. 在 `src/app/pricing/page.tsx` 中替换收款码占位图为真实图片：
+   ```tsx
+   <Image src="/wechat-pay.png" alt="微信支付" width={192} height={192} />
+   ```
 
-### 4. Vercel 部署
+#### 支付流程
+- 用户选择 Pro → 扫码付款 → 提交支付申请
+- 管理员在 `/admin/dashboard` 审核通过 → 自动升级为 Pro
+- 审核拒绝 → 用户收到通知
 
-1. 推送代码到 GitHub：
-```bash
-git add .
-git commit -m "雨洛创作助手 v0.1.0 — MVP 上线"
-git push origin main
-```
+### 5. Vercel 部署
 
+1. 推送代码到 GitHub
 2. 打开 https://vercel.com/new，导入 GitHub 仓库
 3. 配置环境变量（Settings → Environment Variables）：
    - `NEXT_PUBLIC_SUPABASE_URL`
@@ -51,10 +64,9 @@ git push origin main
    - `DEEPSEEK_API_KEY`
    - `DEEPSEEK_BASE_URL`（默认 https://api.deepseek.com）
    - `NEXT_PUBLIC_APP_URL`（填 Vercel 分配的域名）
-
 4. 点击 Deploy
 
-### 5. 域名配置（可选）
+### 6. 域名配置（可选）
 
 1. 购买域名（推荐 Namecheap 或阿里云）
 2. 在 Vercel → Settings → Domains 添加域名
@@ -70,7 +82,26 @@ cp .env.example .env.local
 
 # 启动开发服务器
 npm run dev
+# http://localhost:3000
 ```
+
+## 项目路由总览
+
+| 路由 | 说明 | 公开 |
+|------|------|------|
+| `/` | 首页 | ✅ |
+| `/create` | 创作页面 | ✅（登录后可保存历史） |
+| `/pricing` | 定价页面 | ✅ |
+| `/login` | 登录/注册 | ✅ |
+| `/dashboard` | 用户仪表盘 | 🔒 需登录 |
+| `/admin/login` | 管理员登录 | 🔒 仅管理员 |
+| `/admin/dashboard` | 管理后台 | 🔒 仅管理员 |
+
+## 管理后台功能
+
+- 📊 统计概览：用户数、待审核支付、总创作次数
+- 💰 支付审核：通过/拒绝用户的 Pro 升级申请
+- 📝 创作记录：查看最近的所有生成内容
 
 ## 成本预估（月）
 

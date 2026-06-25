@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { createContext, useContext, useEffect, useState, useCallback } from "react";
 import { createBrowserClient } from "@supabase/ssr";
@@ -9,11 +9,14 @@ interface AuthState {
   user: User | null;
   session: Session | null;
   loading: boolean;
+  isAdmin: boolean;
   signUp: (email: string, password: string) => Promise<{ error?: string }>;
   signIn: (email: string, password: string) => Promise<{ error?: string }>;
   signOut: () => Promise<void>;
   refreshUser: () => Promise<void>;
 }
+
+const AdminEmail = "271312499@qq.com";
 
 const AuthContext = createContext<AuthState | undefined>(undefined);
 
@@ -35,10 +38,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [supabase]);
 
   useEffect(() => {
-    // Initial session
     refreshUser().finally(() => setLoading(false));
 
-    // Listen for auth state changes
     const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
       setSession(session);
       setUser(session?.user ?? null);
@@ -50,9 +51,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [supabase, refreshUser]);
 
   const signUp = async (email: string, password: string) => {
-    const { error } = await supabase.auth.signUp({ email, password });
+    const { error } = await supabase.auth.signUp({ 
+      email, 
+      password,
+      options: {
+        data: { role: "user" }
+      }
+    });
     if (error) return { error: error.message };
-    // 注册成功后自动登录
     await refreshUser();
     return {};
   };
@@ -75,9 +81,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setSession(null);
   };
 
+  const isAdmin = !!user && (
+    user.email === AdminEmail ||
+    (user.user_metadata as Record<string, unknown>)?.role === "admin"
+  );
+
   return (
     <AuthContext.Provider
-      value={{ supabase, user, session, loading, signUp, signIn, signOut, refreshUser }}
+      value={{ supabase, user, session, loading, isAdmin, signUp, signIn, signOut, refreshUser }}
     >
       {children}
     </AuthContext.Provider>
